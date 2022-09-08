@@ -1,5 +1,6 @@
 
-Quick setup:
+# Quick setup:
+```
 need fix the pyang as 1.7.1 and pip==9.0.1
 mkdir pyw
 cd pyw
@@ -12,6 +13,7 @@ cd pyang-pyang-1.7.1 && pip install -r requirements.txt && python setup.py insta
 git clone git@github.com:joely1101/pyang-swagger.git
 cp pyang-swagger/pyang/plugins/swagger.py ./pyw/lib/python2.7/site-packages/pyang-1.7.1-py2.7.egg/pyang/plugins/
 pyang -f swagger -p modules modules/config-bridge.yang -o config-bridge-swagger.json
+```
 check config-bridge-swagger.json
 
 
