@@ -1,3 +1,20 @@
+
+Quick setup:
+need fix the pyang as 1.7.1 and pip==9.0.1
+mkdir pyw
+cd pyw
+virtualenv -p python2 pyw
+source pyw/bin/activate
+python -m pip install pip==9.0.1
+wget https://github.com/mbj4668/pyang/archive/pyang-1.7.1.tar.gz
+tar xvf pyang-1.7.1.tar.gz
+cd pyang-pyang-1.7.1 && pip install -r requirements.txt && python setup.py install;cd -
+git clone git@github.com:joely1101/pyang-swagger.git
+cp pyang-swagger/pyang/plugins/swagger.py ./pyw/lib/python2.7/site-packages/pyang-1.7.1-py2.7.egg/pyang/plugins/
+pyang -f swagger -p modules modules/config-bridge.yang -o config-bridge-swagger.json
+check config-bridge-swagger.json
+
+
 # Pyang plugin for Swagger
 
 Most of the code has been taken from the [Pyang-COP](https://github.com/ict-strauss/COP/tree/master/pyang_plugins) repository and modified to fit our requirements
@@ -7,6 +24,7 @@ Most of the code has been taken from the [Pyang-COP](https://github.com/ict-stra
 It can be used to validate YANG modules for correctness, to transform YANG modules into other formats, and to generate code from the modules. We have written a pyang plugin to obtain the RESTCONF API from a yang model.
 
 The RESTCONF API of the YANG model is interpreted with [Swagger](http://swagger.io/), which is a powerful framework for API description. This framework will be used to generate a Stub server for the YANG module.
+
 
 
 ##Install pyang
