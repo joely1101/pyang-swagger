@@ -1,7 +1,7 @@
 
 # Quick setup:
-```
 need fix the pyang as 1.7.1 and pip==9.0.1
+```
 mkdir pyw
 cd pyw
 virtualenv -p python2 pyw
