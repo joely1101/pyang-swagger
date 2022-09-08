@@ -27,7 +27,10 @@ from pyang import types
 
 TYPEDEFS = dict()
 PARENT_MODELS = dict()
-
+HAVE_LEAF_NODE=False
+HAV_AUTHEN=False
+AUTHEN_SPEC_NAME='api_authenticaion'
+API_PREFIX="/config"
 
 def pyang_plugin_init():
     """ Initialization function called by the plugin loader. """
@@ -62,6 +65,22 @@ class SwaggerPlugin(plugin.PyangPlugin):
                 dest='s_api',
                 help='Simplified apis'),
             optparse.make_option(
+                '--haveleafpath',
+                action="store_true",
+                dest='have_leaf_path',
+                help='No write leaf node'),
+            optparse.make_option(
+                '--api-prefix',
+                dest='api_prefix',
+                type='string',
+                help='uri-prefix'),
+            optparse.make_option(
+                '--haveauthen',
+                action="store_true",
+                dest='have_auth',
+                help='No write leaf node'),
+                
+            optparse.make_option(
                 '--swagger-path',
                 dest='swagger_path',
                 type='string',
@@ -77,7 +96,8 @@ class SwaggerPlugin(plugin.PyangPlugin):
 
     def pre_validate(self, ctx, modules):
         for module in modules:
-            add_fake_list_at_beginning(module)
+            print('pre_validate {}'.format(module.arg))
+            #add_prefix_at_beginning(module)
 
     def emit(self, ctx, modules, fd):
         # TODO: the path variable is currently not used.
@@ -89,8 +109,25 @@ class SwaggerPlugin(plugin.PyangPlugin):
             path = None
         global S_API
         S_API = ctx.opts.s_api
+        #joel
+        global HAVE_LEAF_NODE
+        HAVE_LEAF_NODE = True if ctx.opts.have_leaf_path else False
+        global API_PREFIX
+        if ctx.opts.have_leaf_path != "":
+            API_PREFIX=ctx.opts.api_prefix
+        
+        global HAV_AUTHEN
+        HAV_AUTHEN=True if ctx.opts.have_auth else False
+
+        #print('HAVE_LEAF_NODE={}'.format(HAVE_LEAF_NODE))
         emit_swagger_spec(ctx, modules, fd, ctx.opts.path)
 
+def add_prefix_at_beginning(module):
+    
+    top_list = statements.Statement(module, module, error.Position("Automatically inserted statement"), "list",
+                                    module.arg)
+    #print('top_list {}'.format(top_list))
+    module.substmts.append(top_list)
 
 def add_fake_list_at_beginning(module):
     top_list = statements.Statement(module, module, error.Position("Automatically inserted statement"), "list",
@@ -220,13 +257,31 @@ def print_header(module, fd, children):
                 # TODO: Add here additional information for the tag
             }
             header['tags'].append(value.copy())
+    """
+    securityDefinitions:
+      api_sec:
+        type: apiKey
+        name: Authorization
+        in: header
 
+    """
+    if HAV_AUTHEN == True:
+        authen={
+            AUTHEN_SPEC_NAME:{
+                'type':'apiKey',
+                'name':'Authorization',
+                'in':'header'
+            }
+        }
+        header['securityDefinitions'] = authen
+        #print("securityDefinitions={}".format(header['securityDefinitions']))
+    
     return header
 
 
 def emit_swagger_spec(ctx, modules, fd, path):
     """ Emits the complete swagger specification for the yang file."""
-
+    #print('emit_swagger_spec path={}'.format(path))
     printed_header = False
     model = OrderedDict()
     definitions = OrderedDict()
@@ -240,7 +295,7 @@ def emit_swagger_spec(ctx, modules, fd, path):
         if not printed_header:
             model = print_header(module, fd, chs)
             printed_header = True
-            path = '/'
+            path = '{}/{}:'.format(API_PREFIX,module.arg)
 
         typdefs = [module.i_typedefs[element] for element in module.i_typedefs]
         models = list(module.i_groupings.values())
@@ -279,6 +334,7 @@ def emit_swagger_spec(ctx, modules, fd, path):
             gen_apis(chs, path, model['paths'], definitions, is_root=True)
 
         model['definitions'] = definitions
+        #print(json.dumps(definitions,indent=4, separators=(',', ': '),sort_keys = False))
         fd.write(json.dumps(model, indent=4, separators=(',', ': ')))
 
 
@@ -499,7 +555,13 @@ def gen_apis(children, path, apis, definitions, config=True, is_root=False):
 
 def gen_api_node(node, path, apis, definitions, config=True):
     """ Generate the API for a node."""
-    path += str(node.arg) + '/'
+    #joel
+    #path += str(node.arg) + '/'
+    if path[-1] == ':':
+        path += str(node.arg)
+    else:
+        path += '/' + str(node.arg)
+    #print('path={}'.format(path))
     tree = {}
     schema = {}
     keyList = []
@@ -544,12 +606,14 @@ def gen_api_node(node, path, apis, definitions, config=True):
                             new_param_name = node.arg[1:] + '_' + to_lower_camelcase(key)
                         else:
                             new_param_name = node.arg + '_' + to_lower_camelcase(key)
-                        path += '{' + new_param_name + '}/'
+                        #path += '/'+ str(new_param_name)+'={' + new_param_name + '}'
+                        path += '/{' + new_param_name + '}'
                         for child in node.i_children:
                             if child.arg == key:
                                 child.arg = new_param_name
                     else:
-                        path += '{' + to_lower_camelcase(key) + '}/'
+                        #path += '/'+str(key)+'={' + to_lower_camelcase(key) + '}'
+                        path += '/{' + to_lower_camelcase(key) + '}'
 
             schema_list = {}
             gen_model([node], schema_list, config)
@@ -579,6 +643,10 @@ def gen_api_node(node, path, apis, definitions, config=True):
                 schema = schema[to_lower_camelcase(node.arg)]
 
         elif node.keyword == 'leaf':
+            #joel
+            if HAVE_LEAF_NODE != True:
+                #print("NO_LEAF_NODE")
+                return
             gen_model([node], schema, config)
 
             # There is only one attribute, I do not want to create a new schema for this
@@ -604,6 +672,7 @@ def gen_api_node(node, path, apis, definitions, config=True):
             new_schema = schema
         else:
             new_schema = {"$ref": schema['$ref']}
+        
         apis[str(path)] = print_api(node, config, new_schema, path)
 
     elif node.keyword == 'rpc':
@@ -693,10 +762,10 @@ def print_rpc(node, schema_in, schema_out):
 # print the API JSON structure.
 def print_api(node, config, ref, path):
     """ Creates the available operations for the node."""
-    operations = {}
+    operations = OrderedDict()
     if config and config != 'false':
-        operations['post'] = generate_create(node, ref, path)
         operations['get'] = generate_retrieve(node, ref, path)
+        operations['post'] = generate_create(node, ref, path)
         operations['put'] = generate_update(node, ref, path)
         operations['delete'] = generate_delete(node, ref, path)
     else:
@@ -705,7 +774,6 @@ def print_api(node, config, ref, path):
         # or node.arg == _ROOT_NODE_NAME:
         if 'post' in operations: del operations['post']
         if 'delete' in operations: del operations['delete']
-
     return operations
 
 
@@ -750,6 +818,10 @@ def generate_create(stmt, schema, path, rpc=None):
     else:
         response = create_responses(stmt.arg)
     post['responses'] = response
+    if HAV_AUTHEN == True:
+        apisec={}
+        apisec[AUTHEN_SPEC_NAME]=[]
+        post['security'] = [apisec]
     return post
 
 
@@ -769,6 +841,12 @@ def generate_retrieve(stmt, schema, path):
     # Responses
     response = create_responses(stmt.arg, schema)
     get['responses'] = response
+
+    if HAV_AUTHEN == True:
+        apisec={}
+        apisec[AUTHEN_SPEC_NAME]=[]
+        get['security'] = [apisec]
+
     return get
 
 
@@ -796,6 +874,10 @@ def generate_update(stmt, schema, path):
     response = create_responses(stmt.arg)
 
     put['responses'] = response
+    if HAV_AUTHEN == True:
+        apisec={}
+        apisec[AUTHEN_SPEC_NAME]=[]
+        put['security'] = [apisec]
     return put
 
 
@@ -813,6 +895,10 @@ def generate_delete(stmt, ref, path):
     # Responses
     response = create_responses(stmt.arg)
     delete['responses'] = response
+    if HAV_AUTHEN == True:
+        apisec={}
+        apisec[AUTHEN_SPEC_NAME]=[]
+        delete['security'] = [apisec]
     return delete
 
 
@@ -886,6 +972,9 @@ def generate_api_header(stmt, struct, operation, path, is_collection=False):
     struct['produces'] = ['application/json']
     struct['consumes'] = ['application/json']
 
+    if _ROOT_NODE_NAME:
+        struct['tags'] = [_ROOT_NODE_NAME]
+"""
     # This is a vendor extension added to support the automatic CLI generation
     struct['x-cliParam'] = dict()
     struct['x-cliParam']['commandName'] = '{0}{1}{2}Cmd'.format(str(operation).lower(),
@@ -948,6 +1037,8 @@ def generate_api_header(stmt, struct, operation, path, is_collection=False):
 
     if _ROOT_NODE_NAME:
         struct['tags'] = [_ROOT_NODE_NAME]
+"""
+
 
 
 def to_lower_camelcase(name):
