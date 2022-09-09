@@ -249,6 +249,8 @@ def print_header(module, fd, children):
     header['schemes'] = ['https']
 
     # Add tags to the header to group the APIs based on every root node found in the YANG
+    """
+    joel no tags on header
     if len(children) > 0:
         header['tags'] = list(dict())
         for i, child in enumerate(children):
@@ -257,6 +259,7 @@ def print_header(module, fd, children):
                 # TODO: Add here additional information for the tag
             }
             header['tags'].append(value.copy())
+    """
     """
     securityDefinitions:
       api_sec:
@@ -284,21 +287,24 @@ def emit_swagger_spec(ctx, modules, fd, path):
     #print('emit_swagger_spec path={}'.format(path))
     printed_header = False
     model = OrderedDict()
+    model['paths'] = OrderedDict()
     definitions = OrderedDict()
-
+    models=[]
     # Go through all modules and extend the model.
     for module in modules:
         # extract children which contain data definition keywords
+        global _ROOT_NODE_NAME
+        _ROOT_NODE_NAME = module.arg
         chs = [ch for ch in module.i_children
                if ch.keyword in (statements.data_definition_keywords + ['rpc', 'notification'])]
 
         if not printed_header:
-            model = print_header(module, fd, chs)
+            model.update(print_header(module, fd, chs))
             printed_header = True
-            path = '{}/{}:'.format(API_PREFIX,module.arg)
+        path = '{}/{}:'.format(API_PREFIX,module.arg)
 
         typdefs = [module.i_typedefs[element] for element in module.i_typedefs]
-        models = list(module.i_groupings.values())
+        models += list(module.i_groupings.values())
         referenced_types = list()
         referenced_types = find_typedefs(ctx, module, models, referenced_types)
         for element in referenced_types:
@@ -330,12 +336,13 @@ def emit_swagger_spec(ctx, modules, fd, path):
 
         # generate the APIs for all children
         if len(chs) > 0:
-            model['paths'] = OrderedDict()
+            #model['paths'] = OrderedDict()
             gen_apis(chs, path, model['paths'], definitions, is_root=True)
 
-        model['definitions'] = definitions
+        #model['definitions'] = definitions
         #print(json.dumps(definitions,indent=4, separators=(',', ': '),sort_keys = False))
-        fd.write(json.dumps(model, indent=4, separators=(',', ': ')))
+    model['definitions'] = definitions
+    fd.write(json.dumps(model, indent=4, separators=(',', ': '),sort_keys = False))
 
 
 def find_models(ctx, module, children, referenced_models):
@@ -544,9 +551,12 @@ def gen_model_node(node, tree_structure, config=True):
 def gen_apis(children, path, apis, definitions, config=True, is_root=False):
     """ Generates the swagger path tree for the APIs."""
     for child in children:
+        """
+        joel use module name as tags
         if is_root:
             global _ROOT_NODE_NAME
             _ROOT_NODE_NAME = child.arg
+        """
         if not hasattr(child, 'i_is_key') or not child.i_is_key:
             gen_api_node(child, path, apis, definitions, config)
 
@@ -573,7 +583,8 @@ def gen_api_node(node, path, apis, definitions, config=True):
             keyList = str(sub.arg).split()
         elif sub.keyword == 'uses':
             # Set the reference to a model, previously defined by a grouping.
-            schema['$ref'] = '#/definitions/{0}'.format(to_upper_camelcase(sub.arg))
+            schema['$ref'] = '#/definitions/{0}_{1}'.format(to_upper_camelcase(sub.arg),'WRAPPER')
+            print(schema['$ref'])
 
     # API entries are only generated from container and list nodes.
     if node.keyword == 'list' or node.keyword == 'container' or node.keyword == 'leaf':
@@ -625,7 +636,17 @@ def gen_api_node(node, path, apis, definitions, config=True):
             if '$ref' not in schema_list[to_lower_camelcase(node.arg)]['items']:
                 definitions[to_upper_camelcase(node.arg + '_schema')] = dict(
                     schema_list[to_lower_camelcase(node.arg)]['items'])
-                schema['$ref'] = '#/definitions/{0}'.format(to_upper_camelcase(node.arg + '_schema'))
+                #schema['$ref'] = '#/definitions/{0}_{1}'.format(to_upper_camelcase(node.arg + '_schema'),'wrapper')
+                schema['$ref'] = '#/definitions/' + to_upper_camelcase(node.arg + '_schema_wrapper')
+                wrapper={'properties':{
+                    node.arg:{
+                         '$ref':'#/definitions/' + to_upper_camelcase(node.arg + '_schema')
+                        }
+                    }
+                }
+                definitions[to_upper_camelcase(node.arg + '_schema_wrapper')] = wrapper
+                #print(json.dumps(definitions,indent=4, separators=(',', ': '),sort_keys = False))
+
             else:
                 schema = dict(schema_list[to_lower_camelcase(node.arg)]['items'])
 
@@ -638,7 +659,14 @@ def gen_api_node(node, path, apis, definitions, config=True):
             # of the body input schema i.e {"child.arg":schema} -> schema
             if '$ref' not in schema[to_lower_camelcase(node.arg)]:
                 definitions[to_upper_camelcase(node.arg + '_schema')] = schema[to_lower_camelcase(node.arg)]
-                schema['$ref'] = '#/definitions/' + to_upper_camelcase(node.arg + '_schema')
+                schema['$ref'] = '#/definitions/' + to_upper_camelcase(node.arg + '_schema_wrapper')
+                wrapper={'properties':{
+                    node.arg:{
+                         '$ref':'#/definitions/' + to_upper_camelcase(node.arg + '_schema')
+                        }
+                    }
+                }
+                definitions[to_upper_camelcase(node.arg + '_schema_wrapper')] = wrapper
             else:
                 schema = schema[to_lower_camelcase(node.arg)]
 
@@ -691,6 +719,7 @@ def gen_api_node(node, path, apis, definitions, config=True):
                             to_lower_camelcase(child.arg)]
                         schema = {'$ref': '#/definitions/' + to_upper_camelcase(node.arg + 'RPC_input_schema')}
                     else:
+                        print("node.arg = {}".format(node.arg))
                         schema = schema[to_lower_camelcase(node.arg)]
                 else:
                     schema = None
@@ -1045,13 +1074,13 @@ def to_lower_camelcase(name):
     """ Converts the name string to lower camelcase by using "-" and "_" as
     markers.
     """
-    return re.sub(r"(?:\B_|\b\-)([a-zA-Z0-9])", lambda l: l.group(1).upper(),
-                  name)
+    return name
+    #return re.sub(r"(?:\B_|\b\-)([a-zA-Z0-9])", lambda l: l.group(1).upper(),name)
 
 
 def to_upper_camelcase(name):
     """ Converts the name string to upper camelcase by using "-" and "_" as
     markers.
     """
-    return re.sub(r"(?:\B_|\b\-|^)([a-zA-Z0-9])", lambda l: l.group(1).upper(),
-                  name)
+    return name
+    #return re.sub(r"(?:\B_|\b\-|^)([a-zA-Z0-9])", lambda l: l.group(1).upper(),name)
