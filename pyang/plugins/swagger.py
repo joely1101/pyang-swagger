@@ -95,8 +95,9 @@ class SwaggerPlugin(plugin.PyangPlugin):
         ctx.implicit_errors = False
 
     def pre_validate(self, ctx, modules):
-        for module in modules:
-            print('pre_validate {}'.format(module.arg))
+        pass
+        #for module in modules:
+            #print(' {}'.format(module.arg))
             #add_prefix_at_beginning(module)
 
     def emit(self, ctx, modules, fd):
@@ -228,25 +229,27 @@ def add_leaf_name_parameters(leaf_name, module):
     leaf_name.substmts.append(leaf_name_mandatory)
     leaf_name.substmts.append(leaf_name_description)
 
-def print_header(module, fd, children):
+def print_header(modules, fd, children):
     """ Print the swagger header information."""
-    module_name = str(module.arg)
-
-    global _MODULE_NAME
-    _MODULE_NAME = module_name
+    #module_name = str(module.arg)
+    module_name=""
+    for module in modules:
+        module_name+="{} ".format(module.arg)
+    #global _MODULE_NAME
+    #_MODULE_NAME = module_name
 
     header = OrderedDict()
     header['swagger'] = '2.0'
     header['info'] = {
-        'description': '%s API generated from %s.yang' % (
-            module_name, module_name),  # module.pos.ref.rsplit('/')[-1]),
+        'description': '%s \nAPI generated from yang model' % (
+            module_name),  # module.pos.ref.rsplit('/')[-1]),
         'version': '1.0.0',
-        'title': str(module_name + ' API')
+        'title': str('Swagger API')
     }
-    header['host'] = 'localhost:8080'
+    #header['host'] = 'localhost:8080'
     # TODO: introduce flexible base path. (CLI options?)
-    header['basePath'] = '/'
-    header['schemes'] = ['https']
+    header['basePath'] = '/edgeranch'
+    header['schemes'] = ['http','https']
 
     # Add tags to the header to group the APIs based on every root node found in the YANG
     """
@@ -293,16 +296,17 @@ def emit_swagger_spec(ctx, modules, fd, path):
     # Go through all modules and extend the model.
     for module in modules:
         # extract children which contain data definition keywords
+        print("process  module {}".format(module.arg))
         global _ROOT_NODE_NAME
         _ROOT_NODE_NAME = module.arg
         chs = [ch for ch in module.i_children
                if ch.keyword in (statements.data_definition_keywords + ['rpc', 'notification'])]
 
         if not printed_header:
-            model.update(print_header(module, fd, chs))
+            model.update(print_header(modules, fd, chs))
             printed_header = True
         path = '{}/{}:'.format(API_PREFIX,module.arg)
-
+        
         typdefs = [module.i_typedefs[element] for element in module.i_typedefs]
         models += list(module.i_groupings.values())
         referenced_types = list()
@@ -583,8 +587,9 @@ def gen_api_node(node, path, apis, definitions, config=True):
             keyList = str(sub.arg).split()
         elif sub.keyword == 'uses':
             # Set the reference to a model, previously defined by a grouping.
-            schema['$ref'] = '#/definitions/{0}_{1}'.format(to_upper_camelcase(sub.arg),'WRAPPER')
-            print(schema['$ref'])
+            schema['$ref'] = '#/definitions/{0}'.format(to_upper_camelcase(sub.arg))
+            #schema['$ref'] = '#/definitions/{0}_{1}'.format(to_upper_camelcase(sub.arg),'WRAPPER')
+            #print(schema['$ref'])
 
     # API entries are only generated from container and list nodes.
     if node.keyword == 'list' or node.keyword == 'container' or node.keyword == 'leaf':
@@ -719,8 +724,9 @@ def gen_api_node(node, path, apis, definitions, config=True):
                             to_lower_camelcase(child.arg)]
                         schema = {'$ref': '#/definitions/' + to_upper_camelcase(node.arg + 'RPC_input_schema')}
                     else:
-                        print("node.arg = {}".format(node.arg))
-                        schema = schema[to_lower_camelcase(node.arg)]
+                        #print("schema.arg = {}".format(schema))
+                        #schema = schema[to_lower_camelcase(node.arg)]
+                        schema = schema[to_lower_camelcase(child.arg)]
                 else:
                     schema = None
 
@@ -1074,6 +1080,7 @@ def to_lower_camelcase(name):
     """ Converts the name string to lower camelcase by using "-" and "_" as
     markers.
     """
+    #print("==>{}".format(name))
     return name
     #return re.sub(r"(?:\B_|\b\-)([a-zA-Z0-9])", lambda l: l.group(1).upper(),name)
 
