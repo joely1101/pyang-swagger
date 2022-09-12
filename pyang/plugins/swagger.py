@@ -290,7 +290,6 @@ def emit_swagger_spec(ctx, modules, fd, path):
     #print('emit_swagger_spec path={}'.format(path))
     printed_header = False
     model = OrderedDict()
-    model['paths'] = OrderedDict()
     definitions = OrderedDict()
     models=[]
     # Go through all modules and extend the model.
@@ -304,6 +303,7 @@ def emit_swagger_spec(ctx, modules, fd, path):
 
         if not printed_header:
             model.update(print_header(modules, fd, chs))
+            model['paths'] = OrderedDict()
             printed_header = True
         path = '{}/{}:'.format(API_PREFIX,module.arg)
         
@@ -725,8 +725,10 @@ def gen_api_node(node, path, apis, definitions, config=True):
                         schema = {'$ref': '#/definitions/' + to_upper_camelcase(node.arg + 'RPC_input_schema')}
                     else:
                         #print("schema.arg = {}".format(schema))
-                        #schema = schema[to_lower_camelcase(node.arg)]
-                        schema = schema[to_lower_camelcase(child.arg)]
+                        if to_lower_camelcase(node.arg) in schema:
+                            schema = schema[to_lower_camelcase(node.arg)]
+                        else:
+                            schema = schema[to_lower_camelcase(child.arg)]
                 else:
                     schema = None
 
