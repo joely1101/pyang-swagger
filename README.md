@@ -2,6 +2,16 @@
 # Quick setup:
 need fix the pyang as 1.7.1 and pip==9.0.1
 ```
+#for python-alpine docker(python:2.7.18-alpine)
+python -m pip install pip==9.0.1
+apk add --update --no-cache g++ gcc libxslt-dev libxml2-dev
+wget https://github.com/mbj4668/pyang/archive/pyang-1.7.1.tar.gz
+tar xvf pyang-1.7.1.tar.gz
+cd pyang-pyang-1.7.1 && pip install -r requirements.txt && python setup.py install;cd -
+wget -O /usr/local/lib/python2.7/site-packages/pyang-1.7.1-py2.7.egg/pyang/plugins/swagger.py https://raw.githubusercontent.com/joely1101/pyang-swagger/master/pyang/plugins/swagger.py
+pyang -f swagger -p yang_path:path2 path_to/config-bridge.yang -o config-bridge-swagger.json
+
+#for virtual env
 mkdir pyw
 cd pyw
 virtualenv -p python2 pyw
