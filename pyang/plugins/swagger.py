@@ -114,7 +114,7 @@ class SwaggerPlugin(plugin.PyangPlugin):
         global HAVE_LEAF_NODE
         HAVE_LEAF_NODE = True if ctx.opts.have_leaf_path else False
         global API_PREFIX
-        if ctx.opts.have_leaf_path != "":
+        if ctx.opts.api_prefix != None:
             API_PREFIX=ctx.opts.api_prefix
         
         global HAV_AUTHEN
